@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Namkyu — Interactive</title>
+    <link rel="icon" href="logo.png" type="image/png">
+    
+<style>
+  :root{
+    --bg:#F5F5F5;
+    --fg:#000000;
+    --accent:#00ffff;
+    --size-clamp:min(14vw, 140px);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family: 'Helvetica', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    overflow:hidden;
+  }
+
+  .stage{
+    position:relative; height:100%; display:grid; place-items:center;
+  }
+
+  .warp{
+    filter:url(#warpFilter);
+    will-change:filter;
+  }
+
+  .word{
+    display:flex; gap:0.02em; line-height:0.8;
+    font-size:var(--size-clamp); font-weight:700; letter-spacing:0.01em;
+    mix-blend-mode:normal;
+    text-align: center;
+  }
+  .word span{
+    display:inline-block; transform-origin:50% 50%;
+    transition:transform 120ms cubic-bezier(0.1, 0.9, 0.2, 1);
+  }
+
+  .scan-lines {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(to bottom, rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%);
+    background-size: 100% 4px;
+    opacity: 0.15;
+    z-index: 50;
+    animation: scan 1.5s linear infinite;
+  }
+  
+  .input-wrap {
+    position: fixed;
+    bottom: 8vh;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  
+  .text-input {
+    font-family: monospace;
+    background: rgba(0,0,0,0.05);
+    border: 1px solid rgba(0,0,0,0.1);
+    color: var(--fg);
+    padding: 0.75em 1em;
+    border-radius: 999px;
+    text-align: center;
+    font-size: 16px;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+    width: min(300px, 70vw);
+  }
+  .text-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 12px rgba(0,255,255,0.3);
+  }
+
+  @keyframes scan {
+    from { background-position-y: 0; }
+    to { background-position-y: 4px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .word span{ transition:none }
+    .warp{ filter:none }
+    .scan-lines { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute">
+    <filter id="warpFilter">
+      <feTurbulence type="fractalNoise" baseFrequency="0.005 0.009" numOctaves="1" seed="7" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="8" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </svg>
+
+  <div class="scan-lines"></div>
+  <div class="stage">
+    <div class="warp">
+      <div class="word" id="word"></div>
+    </div>
+  </div>
+  
+  <div class="input-wrap">
+    <input type="text" class="text-input" id="text-input" value="Namkyu." placeholder="Type here..." />
+  </div>
+
+<script>
+(function(){
+  const wordContainer = document.getElementById('word');
+  const textInput = document.getElementById('text-input');
+  const filter  = document.querySelector('#warpFilter feDisplacementMap');
+
+  let spans = [];
+  let metrics = [];
+  let vw = window.innerWidth, vh = window.innerHeight;
+  let mouse = { x: vw/2, y: vh/2 };
+  let t = 0, raf;
+
+  function lerp(a,b,n){ return a + (b-a)*n; }
+  function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
+
+  function updateText() {
+    wordContainer.innerHTML = '';
+    const text = textInput.value;
+    for (const char of text) {
+        const span = document.createElement('span');
+        span.textContent = char;
+        wordContainer.appendChild(span);
+    }
+    spans = Array.from(wordContainer.querySelectorAll('span'));
+    // Use a small delay before calculating metrics to ensure layout is updated
+    setTimeout(() => { metrics = letterMetrics(); }, 100);
+  }
+
+  function letterMetrics(){
+    return spans.map(s=>{
+      const r = s.getBoundingClientRect();
+      return { 
+        x: r.left + r.width/2, 
+        y: r.top + r.height/2,
+      };
+    });
+  }
+
+  function onMove(x,y){
+    mouse.x = x; mouse.y = y;
+  }
+  window.addEventListener('mousemove', e => onMove(e.clientX, e.clientY), {passive:true});
+  window.addEventListener('touchmove', e => {
+    const p = e.touches[0]; if(!p) return;
+    onMove(p.clientX, p.clientY);
+  }, {passive:true});
+  window.addEventListener('resize', ()=>{
+    vw = window.innerWidth; vh = window.innerHeight;
+    metrics = letterMetrics();
+  });
+
+  function tick(now){
+    t += 0.015;
+
+    const dx = (mouse.x - vw/2)/vw, dy = (mouse.y - vh/2)/vh;
+    const distCenter = Math.hypot(dx, dy);
+    const baseScale = lerp(4, 10, clamp(distCenter*1.2, 0, 1));
+    filter.setAttribute('scale', baseScale.toFixed(2));
+
+    if(metrics.length !== spans.length) metrics = letterMetrics();
+    
+    spans.forEach((s, i)=>{
+      const m = metrics[i];
+      if (!m) return;
+
+      const d_dx = m.x - mouse.x;
+      const d_dy = m.y - mouse.y;
+      const d = Math.hypot(d_dx, d_dy);
+
+      const falloff = Math.exp(- (d*d) / (vw*0.15*vw*0.15));
+      const wobble = Math.sin(t*2 + i*0.9) * 0.05;
+
+      const stretch = clamp(1 + falloff * 1.5 + wobble, 0.8, 3.0);
+      const squash = 1 / stretch;
+      const rot = Math.atan2(d_dy, d_dx) + Math.PI / 2;
+
+      s.style.transform = `rotate(${rot}rad) scale(${squash.toFixed(3)}, ${stretch.toFixed(3)})`;
+    });
+    
+    raf = requestAnimationFrame(tick);
+  }
+  
+  textInput.addEventListener('input', updateText);
+  updateText();
+  raf = requestAnimationFrame(tick);
+
+})();
+</script>
+</body>
+</html>
