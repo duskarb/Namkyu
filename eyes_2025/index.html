@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Many Eyes</title>
+    <link rel="icon" href="logo.png" type="image/png">
+    
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #F5F5F5;
+            overflow: hidden;
+        }
+
+        .eye {
+            position: absolute;
+            border-radius: 50%;
+            background-color: #fff;
+            border: 3px solid #ccc;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1), inset 0 0 15px rgba(0,0,0,0.2);
+        }
+
+        .iris {
+            position: absolute;
+            width: 60%;
+            height: 60%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            transition: transform 0.15s ease-out;
+        }
+
+        .pupil {
+            width: 50%;
+            height: 50%;
+            background-color: #000;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: transform 0.1s ease-out;
+            box-shadow: inset 0 0 5px rgba(255,255,255,0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <script>
+        const container = document.body;
+        const mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        const eyes = [];
+        const eyeColorPalette = ['#ff5c5c', '#5cffff', '#5cff5c', '#ffff5c', '#ff5cff', '#a0a0ff', '#ff9a5c'];
+
+        const NUM_EYES = 20;
+
+        function createEye(x, y, size) {
+            const eye = document.createElement('div');
+            eye.className = 'eye';
+            eye.style.width = `${size}px`;
+            eye.style.height = `${size}px`;
+            eye.style.left = `${x}px`;
+            eye.style.top = `${y}px`;
+
+            const iris = document.createElement('div');
+            iris.className = 'iris';
+            const color = eyeColorPalette[Math.floor(Math.random() * eyeColorPalette.length)];
+            iris.style.backgroundColor = color;
+            iris.style.boxShadow = `0 0 20px ${color}88`;
+
+            const pupil = document.createElement('div');
+            pupil.className = 'pupil';
+            
+            iris.appendChild(pupil);
+            eye.appendChild(iris);
+            container.appendChild(eye);
+
+            return { eye, iris, pupil, x: x + size / 2, y: y + size / 2, size };
+        }
+
+        function init() {
+            for (let i = 0; i < NUM_EYES; i++) {
+                const size = Math.random() * 100 + 50; // 50px to 150px
+                const x = Math.random() * (window.innerWidth - size);
+                const y = Math.random() * (window.innerHeight - size);
+                eyes.push(createEye(x, y, size));
+            }
+        }
+
+        function animate() {
+            eyes.forEach(eyeData => {
+                const angle = Math.atan2(mouse.y - eyeData.y, mouse.x - eyeData.x);
+                const distMouse = Math.hypot(mouse.x - eyeData.x, mouse.y - eyeData.y);
+
+                // Iris following
+                const maxIrisDist = (eyeData.size * 0.5) - (eyeData.iris.offsetWidth * 0.5);
+                const irisX = Math.cos(angle) * maxIrisDist;
+                const irisY = Math.sin(angle) * maxIrisDist;
+                eyeData.iris.style.transform = `translate(-50%, -50%) translate(${irisX}px, ${irisY}px)`;
+
+                // Pupil dilation
+                const dilationRadius = eyeData.size * 1.5;
+                let scale = 1;
+                if (distMouse < dilationRadius) {
+                    scale = 1 + (1 - distMouse / dilationRadius) * 1.2;
+                }
+                scale = Math.max(1, Math.min(scale, 2.2));
+                eyeData.pupil.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('mousemove', (event) => {
+            mouse.x = event.clientX;
+            mouse.y = event.clientY;
+        });
+        
+        window.addEventListener('touchmove', (event) => {
+            if (event.touches.length > 0) {
+                const touch = event.touches[0];
+                mouse.x = touch.clientX;
+                mouse.y = touch.clientY;
+            }
+        });
+
+        window.onload = function() {
+            init();
+            animate();
+        };
+    </script>
+
+</body>
+</html>

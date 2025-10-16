@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Give Me Love (No Keyboard UI)</title>
+    <link rel="icon" href="../logo.png" type="image/png">
+    
+    <style>
+        :root {
+            /* Keep only general colors, remove key-specific ones */
+            --key-success-bg: #ff69b4; /* 진한 핑크색 */
+        }
+
+        body {
+            background-color: #F5F5F5;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            color: #333;
+        }
+
+        .message {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--key-success-bg);
+            margin-bottom: 40px;
+            letter-spacing: 2px;
+        }
+
+        #hearts-container {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: -1;
+        }
+
+        .heart {
+            position: absolute;
+            bottom: -50px;
+            width: 30px;
+            height: 30px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            animation: rise 10s infinite linear;
+            opacity: 0.7;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 100; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 30px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+            max-width: 500px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            text-align: center;
+            position: relative;
+        }
+
+        .modal-content p {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 0;
+            color: #333;
+        }
+
+        .modal-content p.success-message {
+            color: var(--key-success-bg);
+        }
+
+        .modal-content p.failure-message {
+            color: #dc3545; /* Red color for failure */
+        }
+
+        .close-button {
+            color: #aaa;
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: #000;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        @keyframes rise {
+            to {
+                transform: translateY(-110vh);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="message">give me love</div>
+    <div id="hearts-container"></div>
+
+    <!-- Heart Detection Modal -->
+    <div id="heart-detection-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <p id="modal-message"></p>
+        </div>
+    </div>
+
+    <script>
+        // const keyboardUIContainer = document.getElementById('keyboard-ui-container'); // Removed
+        const heartsContainer = document.getElementById('hearts-container');
+        const heartDetectionModal = document.getElementById('heart-detection-modal');
+        const modalMessage = document.getElementById('modal-message');
+        const closeButton = document.querySelector('.close-button');
+        const keyMap = {};
+        let pressedKeys = [];
+
+        // --- ⚙️ 1. 키보드 레이아웃 정의 (빠져있던 부분) ---
+        // Keep keyboardLayout and keyDisplay for logical mapping, even if not rendered
+        const keyboardLayout = [
+            ['Escape', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'],
+            ['Backquote', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus', 'Equal', 'Backspace'],
+            ['Tab', 'KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyT', 'KeyY', 'KeyU', 'KeyI', 'KeyO', 'KeyP', 'BracketLeft', 'BracketRight', 'Backslash'],
+            ['CapsLock', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyH', 'KeyJ', 'KeyK', 'KeyL', 'Semicolon', 'Quote', 'Enter'],
+            ['ShiftLeft', 'KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM', 'Comma', 'Period', 'Slash', 'ShiftRight'],
+            ['Function', 'ControlLeft', 'AltLeft', 'MetaLeft', 'Space', 'MetaRight', 'AltRight', 'Arrows']
+        ];
+
+        const keyDisplay = {
+            'Escape': 'esc', 'Backspace': 'delete', 'Tab': 'tab', 'CapsLock': 'caps lock', 'Enter': 'return',
+            'ShiftLeft': 'shift', 'ShiftRight': 'shift', 'ControlLeft': 'control', 'AltLeft': 'option',
+            'MetaLeft': 'command', 'MetaRight': 'command', 'AltRight': 'option', 'Function': 'fn',
+            'Backquote': '`', 'Digit1': '1', 'Digit2': '2', 'Digit3': '3', 'Digit4': '4', 'Digit5': '5',
+            'Digit6': '6', 'Digit7': '7', 'Digit8': '8', 'Digit9': '9', 'Digit0': '0', 'Minus': '-',
+            'Equal': '=', 'BracketLeft': '[', 'BracketRight': ']', 'Backslash': '\\', 'Semicolon': ';',
+            'Quote': "'", 'Comma': ',', 'Period': '.', 'Slash': '/', 'Space': '',
+            'ArrowUp': '▲', 'ArrowLeft': '◀', 'ArrowDown': '▼', 'ArrowRight': '▶'
+        };
+        
+        // --- 🎨 2. 키보드 UI 생성 (빠져있던 부분) ---
+        // This entire section for UI creation will be removed.
+        // However, the keyMap still needs to be populated for heart detection logic.
+        // So, I will create a simplified loop to populate keyMap without creating UI elements.
+
+        // Simplified keyMap population
+        keyboardLayout.forEach((row, rowIndex) => {
+            row.forEach((key, colIndex) => {
+                if (key === 'Arrows') {
+                    keyMap['ArrowUp'] = { row: rowIndex, col: colIndex + 1 };
+                    keyMap['ArrowLeft'] = { row: rowIndex + 1, col: colIndex };
+                    keyMap['ArrowDown'] = { row: rowIndex + 1, col: colIndex + 1 };
+                    keyMap['ArrowRight'] = { row: rowIndex + 1, col: colIndex + 2 };
+                } else {
+                    keyMap[key] = { row: rowIndex, col: colIndex };
+                }
+            });
+        });
+
+
+        // --- ❤️ 3. 하트 판독 및 피드백 로직 ---
+        function checkHeartShape() {
+            if (pressedKeys.length < 6) {
+                resetKeyboard(false);
+                return;
+            }
+            const coords = pressedKeys.map(k => keyMap[k]).filter(Boolean);
+            if (coords.length === 0) {
+                 resetKeyboard(false);
+                 return;
+            }
+            const minRow = Math.min(...coords.map(c => c.row));
+            const minCol = Math.min(...coords.map(c => c.col));
+            const relCoords = new Set(coords.map(c => `${c.row - minRow},${c.col - minCol}`));
+            const heartShapes = [
+                new Set(['0,1', '0,2', '1,0', '1,3', '2,0', '2,3', '3,1', '3,2']),
+                new Set(['0,1', '0,2', '1,0', '1,3', '2,1', '2,2', '3,1']),
+                new Set(['0,0', '0,2', '1,1', '2,0', '2,2', '3,1']),
+                new Set(['0,1', '0,3', '1,0', '1,4', '2,1', '2,3', '3,2']),
+            ];
+            const matchedShape = heartShapes.find(shape => {
+                let matches = 0;
+                relCoords.forEach(c => { if (shape.has(c)) matches++; });
+                return matches >= shape.size * 0.8 && relCoords.size >= shape.size * 0.8;
+            });
+
+            if (matchedShape) {
+                // No visual keys to add 'success' class to, so this part is removed
+                // pressedKeys.forEach(k => {
+                //     document.querySelector(`.key[data-key="${k}"]`)?.classList.add('success');
+                // });
+                showModal('❤️ Heart Detected! ❤️', true);
+            } else {
+                showModal('💔 No Heart Detected 💔', false);
+            }
+        }
+
+        function showModal(message, isSuccess) {
+            modalMessage.textContent = message;
+            modalMessage.className = ''; // Reset classes
+            if (isSuccess) {
+                modalMessage.classList.add('success-message');
+            } else {
+                modalMessage.classList.add('failure-message');
+            }
+            heartDetectionModal.style.display = 'flex';
+        }
+
+        function hideModal() {
+            heartDetectionModal.style.display = 'none';
+            resetKeyboard(true); // Reset keyboard after modal closes
+        }
+
+        closeButton.addEventListener('click', hideModal);
+        window.addEventListener('click', (event) => {
+            if (event.target == heartDetectionModal) {
+                hideModal();
+            }
+        });
+
+        function resetKeyboard(isSuccess) {
+            // No visual keys to reset 'pressed' or 'success' classes
+            // const keysToReset = document.querySelectorAll(isSuccess ? '.success' : '.pressed');
+            // keysToReset.forEach(keyDiv => keyDiv.classList.remove('pressed', 'success'));
+            pressedKeys = [];
+        }
+
+        // --- 🎧 4. 키 입력 감지 리스너 (빠져있던 부분) ---
+        document.addEventListener('keydown', (e) => {
+            e.preventDefault();
+            const keyCode = e.code;
+
+            if (heartDetectionModal.style.display === 'flex') {
+                // If modal is open, only allow Escape to close it
+                if (keyCode === 'Escape') {
+                    hideModal();
+                }
+                return;
+            }
+
+            if (keyCode === 'Enter') {
+                checkHeartShape();
+                return;
+            }
+            if (keyCode === 'Escape') {
+                // If modal is not open, allow Escape to clear pressed keys
+                resetKeyboard(false);
+                return;
+            }
+
+            // No visual keys to add 'pressed' class to
+            // const keyDiv = document.querySelector(`.key[data-key="${keyCode}"]`);
+            // if (keyDiv && !keyDiv.classList.contains('pressed') && !keyDiv.classList.contains('success')) {
+            //     keyDiv.classList.add('pressed');
+            //     pressedKeys.push(keyCode);
+            // }
+            // Simply push the key code to pressedKeys
+            pressedKeys.push(keyCode);
+        });
+
+        // --- 🎉 5. 배경 애니메이션 ---
+        const colors = ['#ff69b4', '#ff1493', '#c71585', '#db7093', '#ffc0cb'];
+        function createHeart() {
+            const heart = document.createElement('div');
+            heart.classList.add('heart');
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            const svgData = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="${randomColor}" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+            heart.style.backgroundImage = `url('data:image/svg+xml;utf8,${encodeURIComponent(svgData)}')`;
+            heart.style.left = `${Math.random() * 100}vw`;
+            heart.style.animationDuration = `${Math.random() * 5 + 5}s`;
+            const size = Math.random() * 20 + 10;
+            heart.style.width = `${size}px`;
+            heart.style.height = `${size}px`;
+            heart.style.opacity = Math.random();
+            heartsContainer.appendChild(heart);
+            setTimeout(() => heart.remove(), 10000);
+        }
+        setInterval(createHeart, 300);
+    </script>
+</body>
+</html>
